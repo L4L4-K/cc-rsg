@@ -74,6 +74,20 @@ mkdir -p ~/.codex/agents/
 cp ~/.agents/skills/cc-rsg/agents/codex/chapter-investigator.toml ~/.codex/agents/cc-rsg-chapter-investigator.toml
 ```
 
+#### Parent workspace with sibling target repository
+
+Codex can also be launched from a parent workspace that contains the skill under `.agents/` and the target repository as a sibling:
+
+```text
+parent-workspace/
+├── .agents/
+│   └── skills/
+│       └── cc-rsg/
+└── target-repo/
+```
+
+In that layout, invoke `$cc-rsg` from `parent-workspace/`, then select or enter `./target-repo` when Phase 0 asks for the target codebase root. The generated state and deliverables are written under `target-repo/.cc-rsg/`, not under the parent workspace.
+
 ### Verify installation
 
 Claude Code: launch Claude Code and run `/help` — `cc-rsg` should appear in the skill list.
@@ -87,7 +101,7 @@ Codex: launch Codex and run `/skills` or type `$cc-rsg`. If the skill does not a
 ### Basic Flow
 
 ```
-1. Launch Claude Code or Codex at the target codebase root
+1. Launch Claude Code or Codex at the target codebase root, or at a parent workspace that contains `.agents/skills/cc-rsg` and the target repository as a child
 2. Invoke the cc-rsg skill
 3. Answer the 5-question goal definition (Phase 0)
 4. Review recon results and pick a template (Phase 1)
@@ -108,6 +122,7 @@ A `.cc-rsg/` directory is created at the root of the target project, containing:
 
 ```
 .cc-rsg/
+├── skill/              # Runtime copy of cc-rsg support files
 ├── state.json          # Progress tracking
 ├── goal.json           # Phase 0 goal definition
 ├── recon-report.md     # Phase 1 reconnaissance
@@ -427,6 +442,20 @@ mkdir -p ~/.codex/agents/
 cp ~/.agents/skills/cc-rsg/agents/codex/chapter-investigator.toml ~/.codex/agents/cc-rsg-chapter-investigator.toml
 ```
 
+#### 親フォルダの `.agents` から子リポジトリを解析する構成
+
+Codex は、親フォルダにスキルを置き、対象リポジトリをその兄弟要素として置く構成でも利用できます。
+
+```text
+親フォルダ/
+├── .agents/
+│   └── skills/
+│       └── cc-rsg/
+└── 対象のリポジトリルート/
+```
+
+この構成では、`親フォルダ/` で Codex を起動して `$cc-rsg` を呼び出し、Phase 0 で対象コードベースのルートを聞かれたら `./対象のリポジトリルート` を指定します。進捗状態と成果物は親フォルダではなく、`対象のリポジトリルート/.cc-rsg/` に作成されます。
+
 ### 動作確認
 
 Claude Code: Claude Code を起動し、`/help` でスキル一覧に `cc-rsg` が表示されれば成功。
@@ -440,7 +469,7 @@ Codex: Codex を起動し、`/skills` を実行するか `$cc-rsg` と入力し�
 ### 基本フロー
 
 ```
-1. 対象コードベースのルートで Claude Code または Codex を起動
+1. 対象コードベースのルート、または `.agents/skills/cc-rsg` と対象リポジトリを子要素として持つ親フォルダで Claude Code または Codex を起動
 2. cc-rsg スキルを呼び出す
 3. ゴール定義5問に回答(Phase 0)
 4. 偵察結果を確認しテンプレート選定(Phase 1)
@@ -461,6 +490,7 @@ Codex: Codex を起動し、`/skills` を実行するか `$cc-rsg` と入力し�
 
 ```
 .cc-rsg/
+├── skill/              # cc-rsg 実行用サポートファイルのコピー
 ├── state.json          # 進捗管理
 ├── goal.json           # Phase 0 のゴール定義
 ├── recon-report.md     # Phase 1 の偵察結果

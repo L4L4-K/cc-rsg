@@ -116,12 +116,19 @@ Right after the skill starts, fix the scope and the goal. Every later decision d
 ### Procedure
 
 1. **Project confirmation**
+   - Treat the launch/current working directory, the skill bundle directory, and the target project root as distinct concepts.
    - Start from the current working directory and identify the target project.
+   - If the current directory looks like a parent workspace (for example, it contains `.agents/skills/cc-rsg/` and one or more child directories that look like repositories or projects), do not silently treat the parent as the target. Present the likely child project roots as candidates, while still allowing the current directory or a manually entered path.
    - Ask the user "Is this the right root directory for the target codebase?". If not, obtain the correct path.
+   - Resolve the selected target project root before any source scanning. All source reads, inventory extraction, `[REF: ...]` paths, and generated `.cc-rsg/` state use this `target_project_root`, not necessarily the launch directory.
+   - Exclude the parent workspace's `.agents/`, `.claude/`, and `.codex/` directories from target-code reconnaissance unless the user explicitly selected a project root that intentionally includes them.
 
 2. **Initialize the state directory**
-   - Create the `.cc-rsg/` directory.
-   - If an existing `.cc-rsg/state.json` is found, branch to resume mode (see "State management and resume" below).
+   - Create the `<target_project_root>/.cc-rsg/` directory.
+   - If an existing `<target_project_root>/.cc-rsg/state.json` is found, branch to resume mode (see "State management and resume" below).
+   - From this point onward, every relative path written as `.cc-rsg/...` in this document is relative to `target_project_root`. If the host shell remains in the parent workspace, run commands with `target_project_root` as the working directory or use absolute paths.
+   - Create or update `<target_project_root>/.cc-rsg/skill/` as the runtime copy of this skill bundle's support files (`scripts/`, `references/`, `templates/`, `agents/`, `variants/` when present). This keeps later commands such as `.cc-rsg/skill/scripts/source-map.py` stable even when the skill itself was loaded from a parent `.agents/` directory or from `~/.agents/`.
+   - Exclude `<target_project_root>/.cc-rsg/` from source-code inventory and coverage scans.
 
 3. **Output language selection**
 
@@ -139,7 +146,7 @@ Right after the skill starts, fix the scope and the goal. Every later decision d
      2. `userUiLanguage` hint passed from the parent harness's initial prompt
      3. Hard default `"en"` (lowest)
    - **All natural-language output from Step 4 onward** — question UI bodies and choices, confirmation summaries, chapter titles, generated spec body, `questions.json` body text, etc. — is rendered in the language selected here (see Design Principle #11).
-   - **Resume mode**: when `.cc-rsg/goal.json` already exists, read the persisted `output_language` and skip this step entirely.
+   - **Resume mode**: when `<target_project_root>/.cc-rsg/goal.json` already exists, read the persisted `output_language` and skip this step entirely.
 
 4. **Run the 5 goal-definition questions**
    - Use the host-native question adapter to ask the following 5 questions in sequence. **Question bodies, choice labels, and free-form-input placeholders are all rendered in the `output_language` selected in Step 3.** The choice labels below are shown when `output_language == "en"`; the agent dynamically translates them when `output_language == "ja"` (enum values such as `primary_reader: "maintenance_developer"` stay as language-independent English enums in `goal.json`). Each question is choice-based first with a free-form field as a fallback.
@@ -193,10 +200,11 @@ Right after the skill starts, fix the scope and the goal. Every later decision d
    - User-custom files are **exempt from comprehensive per-chapter quality gates** (the 200-lines / 10-REFs / Mermaid / Sources Read minimums) because their quality bar is the user's intent recorded in `free_text_notes`, not the source-derived spec-chapter bar. Only existence + non-empty body is enforced.
 
 6. **Persist to `goal.json`**
-   - Save the language choice from Step 3, the 5 answers from Step 4, and the `user_custom_deliverables` array from Step 5 as a structured `goal.json` under `.cc-rsg/`. Schema:
+   - Save the target root from Step 1, the language choice from Step 3, the 5 answers from Step 4, and the `user_custom_deliverables` array from Step 5 as a structured `goal.json` under `<target_project_root>/.cc-rsg/`. Schema:
 
    ```json
    {
+     "target_root": "/absolute/path/to/target-project",
      "output_language": "en",
      "primary_reader": "maintenance_developer",
      "reader_action": "code_change",
@@ -207,6 +215,7 @@ Right after the skill starts, fix the scope and the goal. Every later decision d
      "user_custom_deliverables": ["manual.md"]
    }
    ```
+   - `target_root` records the resolved target project root selected in Step 1. It is used for resume clarity and auditability; all `.cc-rsg/` paths remain physically under that project root.
    - `output_language` is required and must be `"en"` or `"ja"`. Other enum fields (`primary_reader`, `reader_action`, `granularity`, `perspectives`, `existing_docs`) are language-independent English enums (localized only at display time using `output_language`).
    - `user_custom_deliverables` is a (possibly empty) array of file names that the user explicitly requested in `free_text_notes`. These bypass the chapter-naming regex; their filenames are preserved verbatim. Phase 2 adds them to `wbs.json` as `kind: "user_custom"` chapters; Phase 6 verifies every one of them exists in `final/`.
 
@@ -1361,10 +1370,26 @@ The skill depends on the following reference docs and templates. They live under
     └── coverage-check.py
 ```
 
+Codex may also be launched from a parent workspace that owns the skill while the target repository is a child directory:
+
+```
+parent-workspace/
+├── .agents/
+│   └── skills/
+│       └── cc-rsg/
+├── .codex/
+│   └── agents/
+│       └── cc-rsg-chapter-investigator.toml  # optional
+└── target-repo/
+```
+
+In this layout, Phase 0 must resolve `target-repo/` as `target_project_root` before creating `.cc-rsg/` or scanning source files.
+
 ### Working directory on the consumer project
 
 ```
 .cc-rsg/
+├── skill/              (runtime copy of scripts/references/templates/agents from the active skill bundle)
 ├── state.json          (current phase and progress)
 ├── goal.json           (Phase 0 answers)
 ├── recon-report.md     (Phase 1 reconnaissance output)
