@@ -1,0 +1,6 @@
+interface:
+  display_name: "cc-rsg"
+  short_description: "Reverse-engineer source-backed specification documents from existing codebases."
+  default_prompt: "Use $cc-rsg to reverse-engineer source-backed specification documents from this codebase."
+policy:
+  allow_implicit_invocation: true

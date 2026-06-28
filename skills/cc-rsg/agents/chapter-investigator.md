@@ -145,7 +145,7 @@ The main agent reads this and appends the questions to `questions.json`.
 
 ## What to return on completion
 
-Your `Task` tool return-value text MUST include the following:
+Your host subagent return-value text MUST include the following:
 
 ```
 Chapter NN written to .cc-rsg/drafts/NN-slug.md (XXX lines, NN refs, N code blocks, N mermaid)

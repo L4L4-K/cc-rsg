@@ -1,6 +1,6 @@
 # Subagent Prompt Reference
 
-Full template for the prompt handed to the sub-agent launched in Phase 3 via the Task tool.
+Full template for the prompt handed to the sub-agent launched in Phase 3 via the host-native subagent/delegation tool.
 
 Sub-agents operate in their own isolated context, so every piece of information they need must be in the prompt. At the same time, excessive information bloats the context and degrades accuracy. This document defines the "necessary and sufficient" line.
 
@@ -248,7 +248,7 @@ def investigate_chapter(prompt):
 
 ## Example sub-agent launch from the main agent
 
-Pseudocode (Python-like):
+Pseudocode (Python-like). `Task(...)` represents the host-native delegation call: Claude Code uses the `Task` tool; Codex should use Codex subagents when exposed by the runtime, or the bundled `agents/codex/chapter-investigator.toml` installed as a Codex custom agent. Fall back to inline chapter writing from `SKILL.md` when neither delegation path is available.
 
 ```python
 from collections import defaultdict

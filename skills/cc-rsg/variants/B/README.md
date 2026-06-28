@@ -2,7 +2,8 @@
 
 This directory holds an **alternative execution mode** for cc-rsg in which
 the main agent delegates each chapter to an isolated `chapter-investigator`
-sub-agent via Claude Code's Task tool, instead of writing the chapter body
+sub-agent via the host-native delegation tool (Claude Code `Task`, Codex
+subagents/custom agents when available), instead of writing the chapter body
 itself.
 
 ## When to use mode B
@@ -19,7 +20,7 @@ chapter itself in-line during Phase 3 STEP F". Mode B is opt-in.
 
 | File | Purpose |
 |---|---|
-| `SKILL.phase3-stepG.md` | Overrides Phase 3 STEP G to add Task-based per-chapter delegation, manifest relay, and the mode B return-value contract |
+| `SKILL.phase3-stepG.md` | Overrides Phase 3 STEP G to add host-delegated per-chapter investigation, manifest relay, and the mode B return-value contract |
 | `chapter-investigator.md` | A mode-B variant of the standard `chapter-investigator` sub-agent: the return value carries only the chapter path + a short summary (no body), keeping the main agent's context lean |
 
 ## How to activate
@@ -32,21 +33,24 @@ chapter itself in-line during Phase 3 STEP F". Mode B is opt-in.
 
 2. From Phase 3 onwards, the main agent reads
    `variants/B/SKILL.phase3-stepG.md` for STEP G semantics and delegates
-   chapter authoring via the Task tool with `subagent_type =
-   "chapter-investigator"` configured against
-   `variants/B/chapter-investigator.md`.
+   chapter authoring via the host-native delegation tool. In Claude Code,
+   configure `subagent_type = "chapter-investigator"` against
+   `variants/B/chapter-investigator.md`. In Codex, use an available Codex
+   subagent, or install `agents/codex/chapter-investigator.toml` as a Codex
+   custom agent and include the mode B return-value contract in the prompt.
 
 Mode B is **not** required for normal cc-rsg use; treat this directory as
 a reference variant.
 
 ## Runtime notes
 
-- The Task tool dispatches each sub-agent in an isolated context. Token
-  usage is 5–10× higher than mode A because the prompt cache is not
+- The host delegation tool dispatches each sub-agent in an isolated context.
+  Token usage is 5–10× higher than mode A because the prompt cache is not
   shared across sub-agents.
-- Hosts integrating cc-rsg into a non-Claude-Code runtime should ensure
-  their equivalent of the Task tool genuinely produces isolated contexts;
-  in-process execution defeats the purpose of mode B.
-- When chapter delegation is not desired or the Task tool is unavailable,
+- Hosts integrating cc-rsg should ensure their delegation tool genuinely
+  produces isolated contexts; in-process execution defeats the purpose of
+  mode B.
+- When chapter delegation is not desired or no host delegation tool is
+  available,
   fall back to mode A (the top-level `SKILL.md`) — there is no setup
   required to do so.

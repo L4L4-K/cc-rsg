@@ -1,10 +1,10 @@
 ---
 name: cc-rsg
-description: Reverse-engineer comprehensive specification documents from existing codebases through goal-driven reconnaissance, WBS-based parallel investigation, and iterative question-bank dialogue.
+description: Reverse-engineer comprehensive specification documents from existing codebases in Claude Code or Codex through goal-driven reconnaissance, WBS-based parallel investigation, and iterative question-bank dialogue.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Task, AskUserQuestion, WebFetch, WebSearch
 ---
 
-# cc-rsg (Claude Code Reverse Spec Generator)
+# cc-rsg (Claude Code / Codex Reverse Spec Generator)
 
 A general-purpose framework that reverse-engineers maintenance- or delivery-targeted specification documents from existing codebases (legacy or current).
 
@@ -23,8 +23,26 @@ This skill operates in the "code → spec" direction; it is the symmetric counte
 > skill bundle (SKILL.md, `agents/`, `variants/`, `templates/`, `references/`,
 > and `scripts/` docstrings/messages) is English-base. When
 > `output_language == "ja"`, the agent renders deliverable text
-> (chapter body, AskUserQuestion bodies, progress messages, etc.) in
+> (chapter body, question UI bodies, progress messages, etc.) in
 > Japanese while preserving every machine-readable element verbatim.
+
+---
+
+## Host runtime compatibility (Claude Code / Codex)
+
+This bundle is a portable agent skill. The frontmatter `allowed-tools` field is for Claude Code compatibility; Codex may ignore it and expose tools through its own runtime.
+
+Later sections use Claude Code tool names as semantic aliases. Interpret them through the active host:
+
+| Semantic action | Claude Code | Codex |
+|---|---|---|
+| Ask a choice-based user question | `AskUserQuestion` | Use Codex's host-native user-input flow; use `request_user_input` when it is available, otherwise ask a concise plain-text question and wait for the user's answer. |
+| Read/search files and run scripts | `Read`, `Glob`, `Grep`, `Bash` | Use the available file/search/shell tools; prefer `rg` for search and run the bundled Python scripts locally. |
+| Edit files | `Write`, `Edit` | Use the available file-editing mechanism; in Codex, prefer `apply_patch` for manual edits. |
+| Per-chapter delegation | `Task` / `task()` | Use Codex subagents when exposed by the runtime, or install the bundled `agents/codex/chapter-investigator.toml` as a Codex custom agent. If no subagent/custom-agent path is available, run the same chapter-writing steps inline in the main agent. |
+| Web lookup | `WebFetch`, `WebSearch` | Use host-native web tools only when external facts are needed; source-code-derived specs should primarily cite local files. |
+
+`AskUserQuestion` and `task()` in the rest of this document are therefore not hard requirements for Codex. They mean "use the host's equivalent if it exists; otherwise follow the documented fallback." Preserve all file formats, state transitions, verification gates, and output contracts regardless of host.
 
 ---
 
@@ -33,16 +51,16 @@ This skill operates in the "code → spec" direction; it is the symmetric counte
 This skill operates under the following 11 principles. They are mutually reinforcing; if any one breaks, the reliability of the whole skill collapses.
 
 1. **Goal-driven**: Phase 0 fixes the goal through a 5-question choice-based dialogue and persists it to `.cc-rsg/goal.json`. All subsequent phases reference this goal.
-2. **Hybrid template decision**: Supports three template sources — the user's own template, a Claude-recommended template (derived from reconnaissance), or a user-adjusted version of the recommendation.
+2. **Hybrid template decision**: Supports three template sources — the user's own template, an agent-recommended template (derived from reconnaissance), or a user-adjusted version of the recommendation.
 3. **Reference-based inventory unit selection**: `references/inventory-units.md` lists typical units per language/framework; the relevant patterns for the target codebase are chosen from there.
 4. **Gap-prevention is anchored on inventory-based verification**: Enumerate every extractable unit from the code and mechanically check whether the spec covers each one.
 5. **Question Bank is populated at 3 moments**: end of reconnaissance (high-level questions), during sub-agent investigation (detail questions), and at verification (consistency questions). Classified into 7 standard categories.
 6. **Sub-agents decide dynamically based on question severity**: Critical → leave the section blocked. Important / nice-to-have → proceed with an inference, leaving a marker.
 7. **Question merge is automatic only for "obviously identical"**: "Similar but subtly different" questions are grouped and surfaced to the user for judgement.
-8. **The dialogue protocol is Claude-driven**: Choice-based questions are the default; free-form input is a fallback. AskUserQuestion-style choice UIs are exploited to the maximum.
+8. **The dialogue protocol is host-adapted**: Choice-based questions are the default; free-form input is a fallback. Use the best choice UI available in the active host (`AskUserQuestion` in Claude Code, Codex user-input flow in Codex).
 9. **Unanswerable questions are marked `abandoned`**: They are explicitly recorded in the final spec under "unresolved items", never hidden.
 10. **Dual-consumer handling is reduced to one in goal definition**: If multiple views are needed, restart instead of overloading a single spec.
-11. **Output language is chosen in Phase 0 (English / 日本語) — English is the BASE language**: The very first dialogue is bilingual (English first, then Japanese). The default selection is provided by the parent harness's initial prompt (the user's UI-language hint; falls back to `"en"`). The answer is persisted to `.cc-rsg/goal.json` as `output_language` (`"en"` or `"ja"`). All subsequent natural-language output — AskUserQuestion bodies and choices, progress messages, confirmation summaries, generated spec body and chapter titles, `questions.json` `body` / `answer`, Phase 4 verification reports, resume messages — uses that language. Internal identifiers and machine-readable elements — state keys (`current_phase` etc.), IDs (`Q-XXX` / `INV-XXX`), file names (ASCII slug), `[REF: file:lines]`, `[CONFIDENCE: HIGH|MED|LOW]`, `[ASK SME]`, `[ASSUMED: ...]`, `[BLOCKED: ...]` marker names, and `goal.json` enum values (`primary_reader: "maintenance_developer"` etc.) — stay English **regardless of `output_language`**. The literal `## Sources Read` heading also stays English (so `coverage-check.py` pattern-matches it). The entire skill bundle (this SKILL.md, `agents/`, `variants/`, `templates/*.md`, `references/*.md`, and `scripts/*.py` docstrings / messages) is English-base. When `output_language == "ja"`, the agent dynamically renders deliverable text (chapter body, AskUserQuestion bodies, progress messages, etc.) in Japanese while preserving every machine-readable element verbatim.
+11. **Output language is chosen in Phase 0 (English / 日本語) — English is the BASE language**: The very first dialogue is bilingual (English first, then Japanese). The default selection is provided by the parent harness's initial prompt (the user's UI-language hint; falls back to `"en"`). The answer is persisted to `.cc-rsg/goal.json` as `output_language` (`"en"` or `"ja"`). All subsequent natural-language output — question UI bodies and choices, progress messages, confirmation summaries, generated spec body and chapter titles, `questions.json` `body` / `answer`, Phase 4 verification reports, resume messages — uses that language. Internal identifiers and machine-readable elements — state keys (`current_phase` etc.), IDs (`Q-XXX` / `INV-XXX`), file names (ASCII slug), `[REF: file:lines]`, `[CONFIDENCE: HIGH|MED|LOW]`, `[ASK SME]`, `[ASSUMED: ...]`, `[BLOCKED: ...]` marker names, and `goal.json` enum values (`primary_reader: "maintenance_developer"` etc.) — stay English **regardless of `output_language`**. The literal `## Sources Read` heading also stays English (so `coverage-check.py` pattern-matches it). The entire skill bundle (this SKILL.md, `agents/`, `variants/`, `templates/*.md`, `references/*.md`, and `scripts/*.py` docstrings / messages) is English-base. When `output_language == "ja"`, the agent dynamically renders deliverable text (chapter body, question UI bodies, progress messages, etc.) in Japanese while preserving every machine-readable element verbatim.
 
 ---
 
@@ -108,7 +126,7 @@ Right after the skill starts, fix the scope and the goal. Every later decision d
 3. **Output language selection**
 
    - **This step alone is presented bilingually** because the user's preferred language has not yet been confirmed. The question body and choice labels appear in both English and Japanese.
-   - Use `AskUserQuestion` with:
+   - Use the host-native choice-question adapter (`AskUserQuestion` in Claude Code; Codex user-input flow / `request_user_input` when available) with:
      - Question: `Select the output language for the dialogue and the generated specs / 対話と生成ドキュメントの出力言語を選択してください`
      - Choices (**fixed order; English is the default**):
        1. `English`
@@ -120,17 +138,17 @@ Right after the skill starts, fix the scope and the goal. Every later decision d
      1. The user's explicit click in this step (highest)
      2. `userUiLanguage` hint passed from the parent harness's initial prompt
      3. Hard default `"en"` (lowest)
-   - **All natural-language output from Step 4 onward** — `AskUserQuestion` bodies and choices, confirmation summaries, chapter titles, generated spec body, `questions.json` body text, etc. — is rendered in the language selected here (see Design Principle #11).
+   - **All natural-language output from Step 4 onward** — question UI bodies and choices, confirmation summaries, chapter titles, generated spec body, `questions.json` body text, etc. — is rendered in the language selected here (see Design Principle #11).
    - **Resume mode**: when `.cc-rsg/goal.json` already exists, read the persisted `output_language` and skip this step entirely.
 
 4. **Run the 5 goal-definition questions**
-   - Use `AskUserQuestion` to ask the following 5 questions in sequence. **Question bodies, choice labels, and free-form-input placeholders are all rendered in the `output_language` selected in Step 3.** The choice labels below are shown when `output_language == "en"`; the agent dynamically translates them when `output_language == "ja"` (enum values such as `primary_reader: "maintenance_developer"` stay as language-independent English enums in `goal.json`). Each question is choice-based first with a free-form field as a fallback.
-   - **Question-text quality contract (applies to every `AskUserQuestion` call in every phase, especially when translating into `output_language == "ja"`)**:
+   - Use the host-native question adapter to ask the following 5 questions in sequence. **Question bodies, choice labels, and free-form-input placeholders are all rendered in the `output_language` selected in Step 3.** The choice labels below are shown when `output_language == "en"`; the agent dynamically translates them when `output_language == "ja"` (enum values such as `primary_reader: "maintenance_developer"` stay as language-independent English enums in `goal.json`). Each question is choice-based first with a free-form field as a fallback.
+   - **Question-text quality contract (applies to every user-question call in every phase, especially when translating into `output_language == "ja"`)**:
      1. **NEVER JSON-escape characters.** Emit raw UTF-8 only. If you find yourself writing `あ` or any other `\uXXXX` form inside the `question` or `choices` strings, that is a defect — decode it before emitting. A user who sees `次の中` on screen will reject the run.
      2. **Use only standard Japanese kanji.** Stay within JIS Level 1 / 常用漢字 / 人名用漢字. Do NOT mix in Chinese-simplified variants (e.g. `优 (Chinese)` ← write `優 (Japanese)`; `寸叧` is not a valid word — `対応` is). The runtime has no automatic fix for these; they reach the user verbatim.
      3. **Self-check before emit.** After translating a label to Japanese, mentally re-read it. If any kanji feels unusual for the surrounding context — e.g. `妊` (pregnancy) appearing in `業務妊当性` instead of `妥` (`妥当性` = validity) — regenerate the entire label. Common confusion pairs to double-check: 妥/妊, 暑/署, 復/複, 製/制, 即/則.
      4. **No invented characters / kanji.** If you are unsure of a kanji, use kana (e.g. write `たいおう` instead of `寸叧`). Hiragana is always safer than a wrong kanji.
-     5. These rules apply to **`AskUserQuestion` bodies and choices**, but they do NOT relax the rule that JSON keys, enum values, file names, and machine-readable markers stay English (see Principle #11).
+     5. These rules apply to **question UI bodies and choices**, but they do NOT relax the rule that JSON keys, enum values, file names, and machine-readable markers stay English (see Principle #11).
 
    **Q1. Who is the primary reader of the spec?**
    - Maintenance developer
@@ -221,7 +239,7 @@ Get a rough mental model of the codebase via a shallow reconnaissance, then pick
 
 2. **Present template candidates**
    - Consult `references/template-catalog.md` and propose candidates suitable for the target codebase.
-   - Use `AskUserQuestion` to present the candidates to the user.
+   - Use the host-native question adapter to present the candidates to the user.
 
    **Example template choices**:
    - I have my own template (specify path)
@@ -229,10 +247,10 @@ Get a rough mental model of the codebase via a shallow reconnaissance, then pick
    - Batch processing system spec (`templates/batch-system.md`)
    - API service spec (`templates/api-service.md`)
    - Library/SDK spec (`templates/library-sdk.md`)
-   - Use whichever Claude recommends from reconnaissance
+   - Use whichever the agent recommends from reconnaissance
 
 3. **Adjust the chosen template**
-   - If the user accepts Claude's recommendation, display the chapter outline and ask "Are there chapters to add, remove, or rename?".
+   - If the user accepts the agent's recommendation, display the chapter outline and ask "Are there chapters to add, remove, or rename?".
    - Reflect any additions/removals.
 
 4. **Register high-level questions**
@@ -245,7 +263,7 @@ Get a rough mental model of the codebase via a shallow reconnaissance, then pick
 
 5. **🆕 depth-mode decision (scale-based)**
    - Record the **total file count** observed during reconnaissance at the top of `recon-report.md`. Persist as `total_files` in `.cc-rsg/state.json`.
-   - **If file count > 200**, ask the user with `AskUserQuestion` to choose a **depth mode**:
+   - **If file count > 200**, ask the user with the host-native question adapter to choose a **depth mode**:
      - `comprehensive`: classic behaviour. All chapters detailed, full MECE, full REFs. **Recommended only when exhaustive coverage is required (audit, regulatory).** Takes hours to days.
      - `outline` (**recommended default**): each level's entities are **listed exhaustively in tables** + Mermaid diagrams + a "deep-dive candidates" list at the end of each table. Details are produced on-demand in dialogue after Phase 6. **Best for typical use.**
      - `interactive`: same flow as outline, plus continued deep-dive acceptance after Phase 6 completes. **Use when a team will continue referencing the spec.**
@@ -261,7 +279,7 @@ Get a rough mental model of the codebase via a shallow reconnaissance, then pick
 ### Phase-specific cautions
 - Reconnaissance follows the principle "shallow but wide". Detailed logic understanding is deferred to Phase 3.
 - Without noise exclusion (`node_modules`, `vendor`, `.git`, etc.) the output explodes.
-- If the user brings their own template, you may point out "Claude's recommendation differs", but the decision is the user's.
+- If the user brings their own template, you may point out "the agent recommendation differs", but the decision is the user's.
 
 ---
 
@@ -273,7 +291,7 @@ Finalise the skeleton of the spec, decompose the work to fill each chapter into 
 ### Procedure
 
 1. **Apply the chapter file naming convention and generate the skeleton**
-   - Every chapter file falls into one of three kinds; free naming by Claude is forbidden.
+   - Every chapter file falls into one of three kinds; free naming by the agent is forbidden.
      - **Standard chapter** (`kind: "standard"`): `{NN}-{slug}.md`
        - `NN`: zero-padded two-digit chapter number (`00`-`99`)
        - `slug`: ASCII lowercase + digits + hyphens only (e.g. `01-overview.md`, `04-oauth-oidc.md`)
@@ -482,7 +500,7 @@ Finalise the skeleton of the spec, decompose the work to fill each chapter into 
    - Update `state.json` and proceed to Phase 3.
 
 ### Phase-specific cautions
-- Inventory extraction scripts are generated by Claude on the fly. Pre-built generic scripts cannot keep up with language-specific details.
+- Inventory extraction scripts are generated by the agent on the fly. Pre-built generic scripts cannot keep up with language-specific details.
 - WBS granularity directly drives sub-agent precision. When in doubt, split finer.
 - Skipping the user review causes large rework in Phase 3.
 - **Strictly observe the chapter file naming convention**. Free-form names like `chapter2_architecture.md` or `第3章_認証.md` are NOT allowed. Violations are flagged by `scripts/coverage-check.py`.
@@ -614,11 +632,11 @@ Examples:
 
 If a critical question is hit, leave the corresponding section as `[BLOCKED: see Q-042]` (empty). Loop back from Phase 5 (after dialogue) to Phase 3 to fill it in.
 
-#### STEP G: Per-chapter sub-agent delegation (use when the `task` tool is available; recommended)
+#### STEP G: Per-chapter sub-agent delegation (use when host-native delegation is available; recommended)
 
-In environments where the `task` tool is available, **delegate each chapter to an isolated `chapter-investigator` sub-agent**. Writing every chapter directly in the main agent degrades context; investigating each chapter in its own context yields higher quality.
+In environments where a host-native subagent/delegation tool is available, **delegate each chapter to an isolated `chapter-investigator` sub-agent**. In Claude Code this is the `Task` tool. In Codex, use Codex subagents when the runtime exposes them, or install `agents/codex/chapter-investigator.toml` into `.codex/agents/` or `~/.codex/agents/` as `cc-rsg-chapter-investigator.toml`. Writing every chapter directly in the main agent degrades context; investigating each chapter in its own context yields higher quality.
 
-**Sub-agent invocation template:**
+**Sub-agent invocation template (Claude Code syntax; Codex uses the equivalent subagent/custom-agent call if available):**
 
 ```
 task(
@@ -662,7 +680,7 @@ in English.
 
 **Important constraints**:
 
-- **MANDATORY: Emit ALL chapter `task()` calls in a SINGLE assistant turn (parallel dispatch).**
+- **MANDATORY: Emit ALL chapter delegation requests in a SINGLE assistant turn when the host supports parallel dispatch.**
   This is the most important rule of Phase 3. Read carefully — getting it wrong makes Phase 3 take **N× longer** than it needs to.
 
   **WRONG (sequential — DO NOT DO THIS):**
@@ -687,20 +705,20 @@ in English.
                     ← yield, do NOT plan / think / write anything else
   Single Observation turn: receives all N results at once
   ```
-  In one assistant turn, emit one `task()` tool call per chapter, back-to-back, with NO intervening text, NO `thought`-style narration, NO partial writes — just the task calls. Then yield control. The runtime fans them out concurrently and returns all Observations together when they complete.
+  In one assistant turn, emit one delegation call per chapter, back-to-back, with NO intervening text, NO `thought`-style narration, NO partial writes — just the delegation calls. Then yield control. The runtime fans them out concurrently and returns all observations together when they complete.
 
   With a sub-agent concurrency of 5 and 8 chapters: ~2 batches of ~4 minutes each → ~8 minutes total instead of 32. **Wall time scales by `1 / concurrency`**.
 
-  **Self-check before emitting `task()`:**
+  **Self-check before emitting delegation calls:**
   Have you written the prompts for **every** chapter that needs investigation in this Phase 3 round? If not, finish drafting them first, THEN emit them all together. Never emit one and "see how it goes" — that is the sequential anti-pattern.
 
-  **Runtime concurrency mechanics.** Claude Code's `Task` tool dispatches sub-agents in parallel up to its own pool. Other runtimes integrating the same skill should configure their own sub-agent pool similarly so the batch actually runs in parallel rather than being serialised at the executor level.
+  **Runtime concurrency mechanics.** Claude Code's `Task` tool dispatches sub-agents in parallel up to its own pool. Codex or other runtimes integrating the same skill should use their own sub-agent pool when available so the batch actually runs in parallel rather than being serialised at the executor level.
 
 - **Prompt cache is NOT shared**: each sub-agent has an isolated LLM context, so token usage is 5–10× the main agent.
 - **The sub-agent writes the chapter draft directly via the Write tool** (saved as a file, NOT returned in the task result text). The main agent reads the return value and appends detail questions into `questions.json`.
-- **One `task()` per chapter**. Bundling all chapters into a single `task` call defeats the purpose (the isolated context per chapter disappears).
+- **One delegation call per chapter**. Bundling all chapters into a single subagent call defeats the purpose (the isolated context per chapter disappears).
 
-**When the `task` tool is unavailable**, the main agent performs STEP A-F itself per chapter.
+**When no host-native subagent/delegation tool or Codex custom agent is available**, the main agent performs STEP A-F itself per chapter.
 
 ---
 
@@ -811,7 +829,7 @@ Run inventory cross-check, per-chapter quality metrics, MECE check, and consiste
      3. Add to Sources Read, raise `[REF:]` count, thicken the body
      4. Re-run coverage-check.py
    - For `user_custom` chapters that are missing or empty, treat the failure the same way: return to Phase 3 and fill the chapter using `wbs.json.chapters[].source_intent` and any Phase 5 dialogue answers that pertain to it.
-   - Maximum iterations: **3**. If a `kind: "standard"` chapter still fails after 3 attempts, record it in `99-unresolved.md` as "insufficient quality" and continue. A failing `kind: "user_custom"` chapter must NOT be silently demoted to `99-unresolved.md`; instead, prompt the user via `AskUserQuestion` to (a) keep retrying, (b) reduce scope, or (c) abandon the deliverable explicitly.
+   - Maximum iterations: **3**. If a `kind: "standard"` chapter still fails after 3 attempts, record it in `99-unresolved.md` as "insufficient quality" and continue. A failing `kind: "user_custom"` chapter must NOT be silently demoted to `99-unresolved.md`; instead, prompt the user via the host-native question adapter to (a) keep retrying, (b) reduce scope, or (c) abandon the deliverable explicitly.
 
 4. **Cross-reference verification**
    - Check whether any cross-chapter inconsistency exists for the same concept.
@@ -928,14 +946,14 @@ Satisfy `coverage-check.py`'s `--max-open-ratio 0.2` criterion:
 
 Phase 5 dialogue must actually happen. Recording `phase_5.status: "complete"` while:
 - `questions.json` contains ≥ 20% of questions with `status: "open"`, OR
-- Zero `AskUserQuestion` calls have been emitted in Phase 5, OR
+- Zero host-native user-question prompts have been emitted in Phase 5, OR
 - No question entry in `questions.json` has a populated `answer` field
 
 — is a contract violation. Each of these states is an automatic Phase 5 fail; the agent must restart the 3-stage dialogue, not advance to Phase 6.
 
 Concretely, before declaring Phase 5 complete the agent MUST:
 1. Count `open` vs total questions. If `open / total > 0.2`, continue dialogue.
-2. Verify at least the **Stage 1 overview** AND the **Stage 2 critical clusters** dialogues were actually presented to the user via `AskUserQuestion` (Stage 3 individual questions for the residual). Internal notes or `state.json.phase_5.user_feedback` strings do NOT substitute for actual dialogue.
+2. Verify at least the **Stage 1 overview** AND the **Stage 2 critical clusters** dialogues were actually presented to the user via the host-native question adapter (Stage 3 individual questions for the residual). Internal notes or `state.json.phase_5.user_feedback` strings do NOT substitute for actual dialogue.
 3. Record per-question `answered_by` (user vs. agent inference) and `answered_at` (real UTC timestamp). Bulk-marking 50 questions as "answered" without dialogue is a contract violation.
 
 The Phase 6 intent-vs-delivery audit re-verifies these constraints; failure routes back to Phase 5.
@@ -1006,9 +1024,9 @@ File names follow the ASCII slug convention finalised in Phase 2 (`^(0\d|[1-9]\d
      - `current_phase` must equal `6` (and only `6`) when Phase 6 completes. Earlier values such as `2` while `phase_6.status: "complete"` are inconsistent and indicate the agent advanced phases out of order — fail Phase 6 in that case.
      - For every `i` from 0 to 6, if `phase_i.status == "complete"`, then `phase_j.status` for `j < i` MUST also be `"complete"`. No skipping allowed.
      - `session_history[]` array MUST be present and non-empty. Missing or empty `session_history` indicates the agent never recorded any phase transition and is a contract violation.
-     - The Phase 5 skip-prevention conditions (see Phase 5 "skip prevention" section) must hold: `questions.json` open-ratio ≤ 20%, ≥ 1 `AskUserQuestion` emitted in Phase 5, ≥ 1 question with populated `answer` field.
+     - The Phase 5 skip-prevention conditions (see Phase 5 "skip prevention" section) must hold: `questions.json` open-ratio ≤ 20%, ≥ 1 host-native user-question prompt emitted in Phase 5, ≥ 1 question with populated `answer` field.
    - If ANY check fails: do NOT mark Phase 6 complete. Instead, reopen the offending chapter(s) (`wbs.json.chapters[].status = "pending"`), return to Phase 3 or Phase 5 as appropriate, and loop. Repeat until every check passes.
-   - If after additional Phase 3/4 iterations the agent still cannot deliver a `user_custom` chapter (e.g. the source code does not support it), use `AskUserQuestion` to obtain explicit user permission to drop the deliverable; only an explicit user opt-out justifies skipping the file. Record the decision in `state.json.phase_6.user_opt_outs[]` with the reason.
+   - If after additional Phase 3/4 iterations the agent still cannot deliver a `user_custom` chapter (e.g. the source code does not support it), use the host-native question adapter to obtain explicit user permission to drop the deliverable; only an explicit user opt-out justifies skipping the file. Record the decision in `state.json.phase_6.user_opt_outs[]` with the reason.
 
 7. **Timestamps in `state.json`**
    - Every entry in `state.json.session_history[]` and every `last_updated` / `completed_at` / `timestamp` field MUST use a real UTC timestamp captured at write time (e.g. `date -u +%FT%TZ`). Using a placeholder like `2026-01-01T00:00:00Z` for every event is forbidden — it makes post-mortem analysis impossible.
@@ -1062,7 +1080,7 @@ Recognise user input via the following patterns:
 
 Once the deep-dive target is fixed:
 
-1. Launch the `chapter-investigator` sub-agent via the `task` tool.
+1. Launch the `chapter-investigator` sub-agent via the host-native subagent/delegation tool. If unavailable, perform the same investigation inline.
 2. Sub-agent prompt:
    - Target entity / candidate ID and overview
    - List of related real source files
@@ -1151,7 +1169,7 @@ open → asked → answered
 
 ### Sub-agent prompt template (skeleton)
 
-The prompt skeleton handed to the Task tool in Phase 3. The complete version lives in `references/subagent-prompt.md`.
+The prompt skeleton handed to the host-native subagent/delegation tool in Phase 3. The complete version lives in `references/subagent-prompt.md`.
 
 ```
 You are an investigation agent in charge of a specific chapter.
@@ -1280,6 +1298,12 @@ Per-phase resume message details will be moved into a separate doc in a follow-u
 
 The skill depends on the following reference docs and templates. They live under `references/` and `templates/` next to this file.
 
+### Under `agents/`
+
+- `agents/chapter-investigator.md`: per-chapter sub-agent definition for Claude Code and compatible host delegation.
+- `agents/openai.yaml`: Codex UI metadata for skill display and implicit invocation.
+- `agents/codex/chapter-investigator.toml`: Codex custom-agent template for optional per-chapter delegation. Copy it to `.codex/agents/cc-rsg-chapter-investigator.toml` or `~/.codex/agents/cc-rsg-chapter-investigator.toml` when Codex custom-agent delegation is desired.
+
 ### Under `references/`
 
 - `references/inventory-units.md`: per-language / per-framework inventory unit definitions (PHP, COBOL, Python, Java, JavaScript/TypeScript, C#, etc.)
@@ -1310,10 +1334,14 @@ The skill depends on the following reference docs and templates. They live under
 ### The skill bundle (when distributed)
 
 ```
-.claude/skills/cc-rsg/
+.claude/skills/cc-rsg/        # Claude Code
+# or .agents/skills/cc-rsg/   # Codex
 ├── SKILL.md                          (this file)
 ├── agents/
-│   └── chapter-investigator.md
+│   ├── chapter-investigator.md
+│   ├── codex/
+│   │   └── chapter-investigator.toml
+│   └── openai.yaml
 ├── references/
 │   ├── inventory-units.md
 │   ├── template-catalog.md
@@ -1364,7 +1392,7 @@ The skill depends on the following reference docs and templates. They live under
 ## Key implementation principles
 
 ### Honesty above polish
-A polished, finished-looking spec is less valuable than an honest spec whose gaps are visible. Clearly separate what Claude inferred from what the code unambiguously says, and surface `abandoned` questions as "unresolved items".
+A polished, finished-looking spec is less valuable than an honest spec whose gaps are visible. Clearly separate what the agent inferred from what the code unambiguously says, and surface `abandoned` questions as "unresolved items".
 
 ### Guarantee traceability
 Every statement must be traceable to a specific source-code location with a line range. This inherits the KDM (Knowledge Discovery Metamodel) "Source package" idea and is a hard requirement for a spec that maintenance developers can audit later.
@@ -1399,14 +1427,18 @@ For long-running analysis sessions, record progress / established facts / unreso
 
 ## Versioning and changelog
 
+- v0.5.1 (2026-06-28): Claude Code / Codex host compatibility.
+  - **Codex install support**: document `.agents/skills/` and `~/.agents/skills/` as Codex skill locations while keeping `.claude/skills/` support; add `agents/openai.yaml` for Codex skill UI metadata.
+  - **Codex custom-agent template**: add `agents/codex/chapter-investigator.toml` so Codex users can install a real custom agent for per-chapter delegation instead of relying only on inline fallback.
+  - **Host-adapter semantics**: `AskUserQuestion` and `Task` / `task()` are interpreted as host-native question and subagent-delegation mechanisms; Codex falls back to inline chapter writing when no subagent/custom-agent path is available.
 - v0.5.0 (2026-06-15): intent-vs-delivery enforcement + post-pilot quality hardening.
   - **Mermaid styling contract**: every Mermaid diagram in `drafts/` / `final/` is structure-only (no per-node fill, no hex colours, no `style ... fill:`). The rendering host supplies a theme-aware palette so dark/light/auto themes look consistent.
   - **`user_custom_deliverables` enforcement**: Phase 0 extracts `*.md` filename mentions from `free_text_notes` and persists them as `goal.json.user_custom_deliverables`. Phase 2 adds those files to `wbs.json.chapters[]` with `kind: "user_custom"` under a relaxed naming regex. Phase 6 audits that every one of them exists in `final/` with a non-empty body (≥ 10 lines outside code fences). `coverage-check.py` check 12 enforces this.
   - **Strict `[REF: path:line]` / `[REF: path:start-end]` format**: forbidden variants (`(lines X-Y)`, `<!-- file lines a-b -->`, `[REF: ... L1-L138]`, `[REF: file, lines 1-138]`, `[REF: file]` with no lines, etc.) enumerated explicitly so downstream parsers can rely on the shape.
-  - **Phase 5 skip prevention**: refusing `complete` when `status: open` ratio ≥ 20%, no `AskUserQuestion` call was made, or zero `answer` fields are populated.
+  - **Phase 5 skip prevention**: refusing `complete` when `status: open` ratio ≥ 20%, no host-native user-question prompt was made, or zero `answer` fields are populated.
   - **Phase 3 progression gate**: every chapter in `wbs.json.chapters[]` (standard, reserved, AND user_custom) must have a non-empty body (≥ 10 non-blank lines) before Phase 3 can be marked complete.
-  - **Question-text quality contract**: no `\uXXXX` JSON escapes in AskUserQuestion text, kanji confusion-pair self-check (`妥/妊`, `暑/署`, `復/複`, ...).
-  - **Optional `variants/B/`** for Context Optimization mode B (per-chapter Task delegation with manifest relay) — opt-in via `goal.json.context_optimization_mode = "B"`.
+  - **Question-text quality contract**: no `\uXXXX` JSON escapes in question UI text, kanji confusion-pair self-check (`妥/妊`, `暑/署`, `復/複`, ...).
+  - **Optional `variants/B/`** for Context Optimization mode B (per-chapter delegation with manifest relay) — opt-in via `goal.json.context_optimization_mode = "B"`.
   - **`coverage-check.py`** dynamic NAMING_EXEMPT to exempt user-custom file names from the chapter-naming regex.
 - v0.4.1 (2026-06-11): minor consistency pass — neutralised runtime-specific phrasing in SKILL.md and outline-tables.md.
 - v0.4.0 (2026-06-09): English-base migration of the entire skill bundle (SKILL.md, `agents/`, `variants/`, `templates/`, `references/`, `scripts/`). `goal.json.output_language` defaults to `"en"`; Phase 0 Step 3 prompts the user bilingually.

@@ -1,6 +1,6 @@
-# cc-rsg — Claude Code Reverse Spec Generator
+# cc-rsg — Claude Code / Codex Reverse Spec Generator
 
-> A Claude Code skill that reverse-engineers specification documents from existing codebases
+> A Claude Code and Codex skill that reverse-engineers specification documents from existing codebases
 
 📖 **日本語版は下記にあります** — [Jump to Japanese →](#日本語版)
 
@@ -36,7 +36,7 @@ In the LLM era, asking an AI to "make a spec from this code" produces visually p
 - **Reversa** (OSS): Modern form of "agent-readable executable specifications"
 - **IBM watsonx Code Assistant for Z / AWS Transform / CAST Imaging**: "Deterministic graph + LLM natural language" hybrid architecture
 
-`cc-rsg` builds on these by maximizing Claude Code features (SKILL.md, subagents, AskUserQuestion, Task) into a general-purpose framework.
+`cc-rsg` builds on these by combining agent-skill features available in Claude Code and Codex: `SKILL.md`, host-native choice UIs, subagents/task delegation, local scripts, and file-system state.
 
 ---
 
@@ -54,9 +54,31 @@ mkdir -p ~/.claude/skills/
 cp -r skills/cc-rsg ~/.claude/skills/
 ```
 
+### Place into your Codex environment
+
+```bash
+# As a repository-scoped skill
+mkdir -p .agents/skills/
+cp -r skills/cc-rsg .agents/skills/
+
+# Optional: enable Codex custom-agent chapter delegation for this repository
+mkdir -p .codex/agents/
+cp .agents/skills/cc-rsg/agents/codex/chapter-investigator.toml .codex/agents/cc-rsg-chapter-investigator.toml
+
+# Or as a user-level skill
+mkdir -p ~/.agents/skills/
+cp -r skills/cc-rsg ~/.agents/skills/
+
+# Optional: enable Codex custom-agent chapter delegation for all repositories
+mkdir -p ~/.codex/agents/
+cp ~/.agents/skills/cc-rsg/agents/codex/chapter-investigator.toml ~/.codex/agents/cc-rsg-chapter-investigator.toml
+```
+
 ### Verify installation
 
-Launch Claude Code and run `/help` — `cc-rsg` should appear in the skill list.
+Claude Code: launch Claude Code and run `/help` — `cc-rsg` should appear in the skill list.
+
+Codex: launch Codex and run `/skills` or type `$cc-rsg`. If the skill does not appear after copying it, restart Codex.
 
 ---
 
@@ -65,7 +87,7 @@ Launch Claude Code and run `/help` — `cc-rsg` should appear in the skill list.
 ### Basic Flow
 
 ```
-1. Launch Claude Code at the target codebase root
+1. Launch Claude Code or Codex at the target codebase root
 2. Invoke the cc-rsg skill
 3. Answer the 5-question goal definition (Phase 0)
 4. Review recon results and pick a template (Phase 1)
@@ -78,7 +100,7 @@ Launch Claude Code and run `/help` — `cc-rsg` should appear in the skill list.
 
 ### Pause and Resume
 
-Even if you interrupt the session, progress is saved to `.cc-rsg/state.json`. On the next Claude Code launch, a resume message appears with options: continue / rewind / full reset.
+Even if you interrupt the session, progress is saved to `.cc-rsg/state.json`. On the next Claude Code or Codex launch, a resume message appears with options: continue / rewind / full reset.
 
 ### Output Location
 
@@ -102,7 +124,11 @@ A `.cc-rsg/` directory is created at the root of the target project, containing:
 
 Starting **v0.4.0**, the entire skill bundle (`SKILL.md`, `agents/`, `templates/`, `references/`, and the docstrings/messages of `scripts/`) is **English-base**. The default for `goal.json.output_language` is `"en"`.
 
-Japanese output is fully supported: select `日本語 (Japanese)` in Phase 0 Step 3, and the agent dynamically renders chapter bodies, AskUserQuestion bodies, and progress messages in Japanese while preserving every machine-readable element (`## Sources Read`, `[REF: ...]`, `[CONFIDENCE: ...]`, JSON keys, file slugs, ID prefixes) verbatim in English. See SKILL.md Principle #11 for the full contract.
+Japanese output is fully supported: select `日本語 (Japanese)` in Phase 0 Step 3, and the agent dynamically renders chapter bodies, question UI bodies, and progress messages in Japanese while preserving every machine-readable element (`## Sources Read`, `[REF: ...]`, `[CONFIDENCE: ...]`, JSON keys, file slugs, ID prefixes) verbatim in English. See SKILL.md Principle #11 for the full contract.
+
+### Codex compatibility
+
+Codex loads `cc-rsg` as a regular skill directory with `SKILL.md`, `references/`, `templates/`, `scripts/`, and Codex UI metadata in `agents/openai.yaml`. Claude Code tool names in the instructions are treated as host-adapter aliases: `AskUserQuestion` means the host-native choice-question UI, and `Task` / `task()` means host-native subagent delegation. For Codex custom-agent delegation, install the bundled TOML template from `agents/codex/chapter-investigator.toml` into `.codex/agents/` or `~/.codex/agents/`. If no Codex subagent/custom agent is available, the main agent performs the same chapter-writing steps inline.
 
 ---
 
@@ -219,7 +245,10 @@ cc-rsg/
     └── cc-rsg/
         ├── SKILL.md
         ├── agents/
-        │   └── chapter-investigator.md  # Per-chapter sub-agent definition
+        │   ├── chapter-investigator.md  # Per-chapter sub-agent definition
+        │   ├── codex/
+        │   │   └── chapter-investigator.toml # Codex custom-agent template
+        │   └── openai.yaml              # Codex UI metadata
         ├── references/
         │   ├── inventory-units.md       # Language units + granularity rules + Rails catalog
         │   ├── outline-tables.md        # Overview-table definitions for outline mode (6 stacks)
@@ -248,12 +277,12 @@ cc-rsg/
 
 ## Status
 
-Currently **v0.5.0** (intent-vs-delivery enforcement + post-pilot quality hardening).
+Currently **v0.5.1** (Claude Code / Codex host compatibility).
 
 ### Known Limitations
 
 - Custom category addition requires manual JSON editing (UI mechanism is a future extension)
-- MCP integration is not implemented (designed for standalone Claude Code)
+- No bundled MCP server; MCP integration is host-dependent and optional
 - Slash command options (`--restart`, etc.) are not implemented
 
 ### Roadmap (tentative)
@@ -263,6 +292,7 @@ Currently **v0.5.0** (intent-vs-delivery enforcement + post-pilot quality harden
 - ~~v0.3: Depth modes (comprehensive / outline / interactive), Phase 6.5 interactive deep-dive, outline-tables.md~~ (done)
 - ~~v0.4: English-base migration of the entire skill bundle; bilingual output via `output_language`; README flipped to English-first~~ (done)
 - ~~v0.5: Mermaid styling contract (host-themed palette), `user_custom_deliverables` enforcement, strict `[REF: path:line]` format, Phase 5 skip prevention, intent-vs-delivery audit, optional Context Optimization mode B variant~~ (done)
+- ~~v0.5.1: Codex skill installation path, `agents/openai.yaml`, Codex custom-agent template, and host-adapter semantics for questions/subagents~~ (done)
 - v0.6: UI for custom categories, templates added based on user feedback
 - v1.0: Stable release after several real-project applications
 
@@ -321,11 +351,11 @@ The design draws significant inspiration from:
 
 # 日本語版
 
-# cc-rsg — Claude Code Reverse Spec Generator
+# cc-rsg — Claude Code / Codex Reverse Spec Generator
 
-> 既存のコードベースから仕様書を逆生成(リバースエンジニアリング)するための Claude Code スキル
+> 既存のコードベースから仕様書を逆生成(リバースエンジニアリング)するための Claude Code / Codex スキル
 
-📖 **English version is at the top** — [Jump to English →](#cc-rsg--claude-code-reverse-spec-generator)
+📖 **English version is at the top** — [Jump to English →](#cc-rsg--claude-code--codex-reverse-spec-generator)
 
 `cc-rsg` は、レガシーまたは現役のコードベースから、メンテナンス担当者あるいは納品先顧客に向けた仕様書を自動生成するための汎用フレームワークです。
 
@@ -359,7 +389,7 @@ LLM時代になり、AIに「このコードから仕様書を作って」と頼
 - **Reversa**(OSS): エージェント可読な実行可能仕様という現代的形態
 - **IBM watsonx Code Assistant for Z / AWS Transform / CAST Imaging**: 「決定論的グラフ + LLM自然言語化」のハイブリッドアーキテクチャ
 
-`cc-rsg` はこれらを踏まえ、Claude Code の機能(SKILL.md、subagents、AskUserQuestion、Task)を最大限活用したフレームワークとして設計されています。
+`cc-rsg` はこれらを踏まえ、Claude Code と Codex で利用できるエージェントスキル機能(SKILL.md、ホスト標準の選択式質問UI、subagents / task delegation、ローカルスクリプト、ファイルシステム上の状態管理)を組み合わせたフレームワークとして設計されています。
 
 ---
 
@@ -377,9 +407,31 @@ mkdir -p ~/.claude/skills/
 cp -r skills/cc-rsg ~/.claude/skills/
 ```
 
+### Codex 環境に配置
+
+```bash
+# リポジトリスコープのスキルとして配置する場合
+mkdir -p .agents/skills/
+cp -r skills/cc-rsg .agents/skills/
+
+# 任意: このリポジトリで Codex custom agent による章単位 delegation を有効化
+mkdir -p .codex/agents/
+cp .agents/skills/cc-rsg/agents/codex/chapter-investigator.toml .codex/agents/cc-rsg-chapter-investigator.toml
+
+# または、ユーザーレベルのスキルとして配置する場合
+mkdir -p ~/.agents/skills/
+cp -r skills/cc-rsg ~/.agents/skills/
+
+# 任意: 全リポジトリで Codex custom agent による章単位 delegation を有効化
+mkdir -p ~/.codex/agents/
+cp ~/.agents/skills/cc-rsg/agents/codex/chapter-investigator.toml ~/.codex/agents/cc-rsg-chapter-investigator.toml
+```
+
 ### 動作確認
 
-Claude Code を起動し、`/help` でスキル一覧に `cc-rsg` が表示されれば成功。
+Claude Code: Claude Code を起動し、`/help` でスキル一覧に `cc-rsg` が表示されれば成功。
+
+Codex: Codex を起動し、`/skills` を実行するか `$cc-rsg` と入力して確認。コピー後に表示されない場合は Codex を再起動します。
 
 ---
 
@@ -388,7 +440,7 @@ Claude Code を起動し、`/help` でスキル一覧に `cc-rsg` が表示さ�
 ### 基本フロー
 
 ```
-1. 対象コードベースのルートで Claude Code を起動
+1. 対象コードベースのルートで Claude Code または Codex を起動
 2. cc-rsg スキルを呼び出す
 3. ゴール定義5問に回答(Phase 0)
 4. 偵察結果を確認しテンプレート選定(Phase 1)
@@ -401,7 +453,7 @@ Claude Code を起動し、`/help` でスキル一覧に `cc-rsg` が表示さ�
 
 ### 中断と再開
 
-セッションを中断しても、`.cc-rsg/state.json` に進捗が保存されます。次回 Claude Code 起動時に再開メッセージが表示され、続きから / 巻き戻し / 全リセット のいずれかを選択できます。
+セッションを中断しても、`.cc-rsg/state.json` に進捗が保存されます。次回 Claude Code または Codex 起動時に再開メッセージが表示され、続きから / 巻き戻し / 全リセット のいずれかを選択できます。
 
 ### 出力場所
 
@@ -425,7 +477,11 @@ Claude Code を起動し、`/help` でスキル一覧に `cc-rsg` が表示さ�
 
 **v0.4.0** から、スキル本体一式 (`SKILL.md` / `agents/` / `templates/` / `references/` / `scripts/` の docstring・メッセージ) は **英語ベース** になりました。`goal.json.output_language` のデフォルトは `"en"` です。
 
-日本語出力は引き続き完全サポート: Phase 0 Step 3 で `日本語 (Japanese)` を選択すると、章本文・AskUserQuestion 質問文・進捗メッセージ等の自然言語出力が日本語で動的に生成されます。ただし機械可読要素 (`## Sources Read`、`[REF: ...]`、`[CONFIDENCE: ...]`、JSON キー、ファイル名 slug、ID prefix 等) は言語に関わらず英語固定です。詳細は SKILL.md の Principle #11 を参照。
+日本語出力は引き続き完全サポート: Phase 0 Step 3 で `日本語 (Japanese)` を選択すると、章本文・質問UIの本文・進捗メッセージ等の自然言語出力が日本語で動的に生成されます。ただし機械可読要素 (`## Sources Read`、`[REF: ...]`、`[CONFIDENCE: ...]`、JSON キー、ファイル名 slug、ID prefix 等) は言語に関わらず英語固定です。詳細は SKILL.md の Principle #11 を参照。
+
+### Codex 互換性
+
+Codex は `cc-rsg` を `SKILL.md`、`references/`、`templates/`、`scripts/`、および `agents/openai.yaml` の Codex UI メタデータを含む通常のスキルディレクトリとして読み込みます。手順内の Claude Code ツール名はホスト別アダプタの別名として扱います。`AskUserQuestion` はホスト標準の選択式質問UI、`Task` / `task()` はホスト標準のサブエージェント delegation を意味します。Codex custom agent による章単位 delegation を使う場合は、同梱テンプレート `agents/codex/chapter-investigator.toml` を `.codex/agents/` または `~/.codex/agents/` に配置します。Codex のサブエージェントまたは custom agent が利用できない場合は、メインエージェントが同じ章執筆手順をインラインで実行します。
 
 ---
 
@@ -542,7 +598,10 @@ cc-rsg/
     └── cc-rsg/
         ├── SKILL.md
         ├── agents/
-        │   └── chapter-investigator.md  # 章単位サブエージェント定義
+        │   ├── chapter-investigator.md  # 章単位サブエージェント定義
+        │   ├── codex/
+        │   │   └── chapter-investigator.toml # Codex custom-agent テンプレート
+        │   └── openai.yaml              # Codex UI メタデータ
         ├── references/
         │   ├── inventory-units.md       # 言語別単位 + 粒度規定 + Rails カタログ
         │   ├── outline-tables.md        # outline モード用の概観テーブル定義(6言語)
@@ -571,12 +630,12 @@ cc-rsg/
 
 ## 開発状況
 
-現在 **v0.5.0**(intent-vs-delivery 検証 + 試験運用フィードバックの品質強化)。
+現在 **v0.5.1**(Claude Code / Codex ホスト互換)。
 
 ### 既知の制約
 
 - カスタムカテゴリ追加は手動JSON編集のみ(UI機構は将来拡張)
-- MCP統合は未実装(Claude Code 単体動作を前提)
+- MCP サーバーは同梱していません。MCP 統合はホスト依存の任意機能です
 - スラッシュコマンドのオプション(`--restart` 等)は未実装
 
 ### ロードマップ(暫定)
@@ -586,6 +645,7 @@ cc-rsg/
 - ~~v0.3: depth モード(comprehensive / outline / interactive)、Phase 6.5 対話深掘りモード、outline-tables.md~~(済)
 - ~~v0.4: スキル本体一式の英語ベース化、`output_language` によるバイリンガル出力、README 英語先頭化~~(済)
 - ~~v0.5: Mermaid 配色契約(ホストテーマパレット)、`user_custom_deliverables` 強制化、strict `[REF: path:line]` 形式、Phase 5 skip 防止、intent-vs-delivery 監査、Context Optimization mode B(オプション)~~(済)
+- ~~v0.5.1: Codex のスキル配置手順、`agents/openai.yaml`、Codex custom-agent テンプレート、質問UI / サブエージェントのホスト別アダプタ semantics~~(済)
 - v0.6: カスタムカテゴリのUI追加、利用フィードバックを受けたテンプレート追加
 - v1.0: 数件の実プロジェクト適用後、安定版として公開
 

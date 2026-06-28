@@ -129,13 +129,13 @@ List questions raised while writing the chapter as a **full list inside the trai
 - **Writing files via shell `>` redirection or heredoc** (always use Write / Edit)
 - **Embedding absolute paths (`/home/...` etc.) in the deliverable** (always use workspace-relative paths)
 - **Citing files that are not in Sources Read**
-- **🆕 Pasting the chapter body into the task return text** (strictly forbidden in mode B)
+- **🆕 Pasting the chapter body into the subagent return text** (strictly forbidden in mode B)
 
 ---
 
 ## What to return on completion (mode B contract)
 
-Your `Task` tool return-value text MUST follow the format below. **Pasting the chapter body is strictly forbidden** — the body is already saved to a file, and the main agent reads it from there when needed.
+Your host subagent return-value text MUST follow the format below. **Pasting the chapter body is strictly forbidden** — the body is already saved to a file, and the main agent reads it from there when needed.
 
 ```
 Chapter NN saved: .cc-rsg/drafts/NN-slug.md (XXX lines, NN refs, N code blocks, N mermaid)
